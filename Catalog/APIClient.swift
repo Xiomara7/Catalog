@@ -15,17 +15,16 @@ class APIClient {
     
     let baseURL = "https://api.coursera.org/api/catalogResults.v2"
     
-    var baseParams = [
-        "q":"search",
-        "start":0,
-        "limit":10,
-        "fields":"courseId,onDemandSpecializationId,courses.v1(name,photoUrl,partnerIds),onDemandSpecializations.v1(name,logo,courseIds,partnerIds),partners.v1(name)",
-        "includes":"courseId,onDemandSpecializationId,courses.v1(partnerIds)"
-    ]
-    
-    
-    func searchInCatalog(searchFor: String!, block: (Dictionary<String, AnyObject>?) -> Void) {
+    func searchInCatalog(searchFor: String!, start: String!, limit: String!, block: (Dictionary<String, AnyObject>?) -> Void) {
+        var baseParams = [
+            "q":"search",
+            "includes":"courseId,onDemandSpecializationId,courses.v1(partnerIds)",
+            "fields":"courseId,onDemandSpecializationId,courses.v1(name,photoUrl,partnerIds),onDemandSpecializations.v1(name,logo,courseIds,partnerIds),partners.v1(name)"
+        ]
+        
         baseParams.updateValue(searchFor, forKey: "query")
+        baseParams.updateValue(start as! String, forKey: "start")
+        baseParams.updateValue(limit, forKey: "limit")
         
         Alamofire.request(
             .GET,

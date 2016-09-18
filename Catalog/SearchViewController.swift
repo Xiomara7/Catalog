@@ -7,6 +7,8 @@
 //
 
 import UIKit
+import PureLayout
+import SDWebImage
 
 class SearchViewController: UIViewController,
                             UICollectionViewDelegate,
@@ -15,7 +17,12 @@ class SearchViewController: UIViewController,
                             UISearchBarDelegate {
 
     let searchBar = UISearchBar(frame: CGRect.zero)
+    
+    var showCourses = true
+    var loadMore = false
+    
     var searchResults = Catalog()
+    var segmentedControl = UISegmentedControl(items: ["Courses","Specializations"])
     
     @IBOutlet weak var collectionView: UICollectionView!
     
@@ -25,6 +32,20 @@ class SearchViewController: UIViewController,
         searchBar.placeholder = "Search catalog"
         searchBar.delegate = self
         self.navigationItem.titleView = searchBar
+        
+        segmentedControl.autoSetDimension(.Width, toSize: self.view.frame.size.width)
+        segmentedControl.tintColor = UIColor.lightGrayColor()
+        
+        segmentedControl.selectedSegmentIndex = 0
+        segmentedControl.hidden = true
+        
+        segmentedControl.addTarget(
+            self,
+            action: #selector(segmentedControlChanged),
+            forControlEvents: UIControlEvents.ValueChanged
+        )
+        
+        collectionView.addSubview(segmentedControl)
         
         collectionView.delegate = self
         collectionView.dataSource = self
@@ -37,36 +58,96 @@ class SearchViewController: UIViewController,
     // MARK - SearchBar Delegate Methods
     func searchBarSearchButtonClicked(searchBar: UISearchBar) {
         if searchBar.text != nil {
-            APIClient.shared.searchInCatalog(searchBar.text) { results in
-                self.searchResults.parseCatalog(results!)
-                self.collectionView.reloadData()
-            }
+            
+            // Initial call to load search results
+            APIClient.shared.searchInCatalog(
+                searchBar.text,
+                start: "0",
+                limit: "20",
+                block: { results in
+                    self.searchResults.parseCatalog(results!)
+                    self.collectionView.reloadData()
+                }
+            )
         }
+    }
+    
+    func segmentedControlChanged() {
+        if segmentedControl.selectedSegmentIndex == 0 {
+            showCourses = true
+        } else {
+            showCourses = false
+        }
+        self.collectionView.reloadData()
     }
     
     // MARK - CollectionView Delegate & DataSource Methods
     func collectionView(collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        if searchResults.courses != nil {
-            return searchResults.courses.count
+        if showCourses {
+            if searchResults.courses != nil {
+                return searchResults.courses.count
+            }
         } else {
-            return 0
+            if searchResults.specializations != nil {
+                return searchResults.specializations.count
+            }
         }
+        return 0
     }
     
     func collectionView(collectionView: UICollectionView, cellForItemAtIndexPath indexPath: NSIndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCellWithReuseIdentifier("catalogCell", forIndexPath: indexPath) as! CatalogCell
         
-        cell.nameLabel.text = searchResults.courses[indexPath.row]["name"] as? String
-        //cell.universityNameLabel.text = "University of Puerto Rico, Rio Piedras"
-        //cell.numberOfCoursesLabel.text = "10-course Specialization"
+        segmentedControl.hidden = false
+        if showCourses {
+            cell.numberOfCoursesLabel.hidden = true
+            cell.populateCell(searchResults.courses[indexPath.row])
+            
+            if let partnersIds = searchResults.courses[indexPath.row]["partnerIds"] as? [String] {
+                for id in partnersIds {
+                    let university = searchResults.universities.valueForKey(id) as? Dictionary<String,String>
+                    cell.universityNameLabel.text = university!["name"]
+                }
+            }
+        } else {
+            cell.numberOfCoursesLabel.hidden = false
+            cell.populateCell(searchResults.specializations[indexPath.row])
+            
+            if let partnersIds = searchResults.specializations[indexPath.row]["partnerIds"] as? [String] {
+                for id in partnersIds {
+                    let university = searchResults.universities.valueForKey(id) as? Dictionary<String,String>
+                    cell.universityNameLabel.text = university!["name"]
+                }
+            }
+        }
         
         return cell
+    }
+    
+    func scrollViewDidEndDecelerating(scrollView: UIScrollView) {
+        if searchBar.text != nil {
+            let next = searchResults.next
+                
+            APIClient.shared.searchInCatalog(
+                searchBar.text,
+                start: next,
+                limit: "20",
+                block: { results in
+                    self.searchResults.parseCatalog(results!)
+                    self.collectionView.reloadData()
+                }
+            )
+        }
     }
     
     func collectionView(collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAtIndexPath indexPath: NSIndexPath) -> CGSize {
         
         let sizeScreen = UIScreen.mainScreen().bounds
         return CGSizeMake(sizeScreen.width - 20.0, sizeScreen.height / 6)
+    }
+    
+    override func touchesBegan(touches: Set<UITouch>, withEvent event: UIEvent?) {
+        self.collectionView.endEditing(true)
     }
     
 }
